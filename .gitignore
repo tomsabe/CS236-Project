@@ -1,3 +1,6 @@
+# MNIST data file
+*.npz
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
