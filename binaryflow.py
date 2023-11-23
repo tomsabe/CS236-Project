@@ -6,29 +6,15 @@ from transformations import Transformation
 
 class BitFlow:
     def __init__(self, first_layer: np.ndarray, label=None, mnist_label=None):
-        self.block = np.zeros((1, 32, 32), dtype=int)
+        self.block = np.zeros((1, 32, 32), dtype=np.int32)
         self.block[0, :, :] = first_layer
-        self.transformations = [] #sequence of Transformations
         self.label = label #matrix version of label
         self.mnist_label = mnist_label #int version of label
 
-    def forward(self, layer: np.array) -> np.array:
-        '''Apply all transformations to the specified layer'''
-        for i in range(0,len(self.transformations)):
-            layer = self.transformations[i].forward(layer)
-        return layer
-
-    def backward(self, layer: np.array) -> np.array:
-        '''Apply all inverse transformations to the specified layer'''
-        for i in range(1,len(self.transformations)+1):
-            layer = self.transformations[-i].backward(layer)
-        return layer
-
-    def add_transformation(self, transformation: Transformation):
-        '''Add a transformation and a new layer to the Flow.'''
-        self.transformations.append(transformation)
+    def apply_transformation(self, transformation: Transformation):
+        '''Apply a transformation, adding a new layer.'''
         new_layer = transformation.forward(self.block[-1, :, :])
-        new_layer = np.reshape(new_layer, (1,32,32))
+        new_layer = np.reshape(new_layer, (1,32,32)) #TBD: Eliminate this step
         self.block = np.concatenate((self.block, new_layer), axis=0)
         return self.block
 
@@ -58,9 +44,9 @@ class MNISTBitFlowBatcher:
         # Convert images and labels to BitFlows
         for img, label in zip(batch_images, batch_labels):
             if label == target_label:
-                label_matrix = np.ones((1,32,32), dtype=int)
+                label_matrix = np.ones((1,32,32), dtype=np.int32)
             else:
-                label_matrix = np.zeros((1,32, 32), dtype=int)
+                label_matrix = np.zeros((1,32, 32), dtype=np.int32)
             bitflow = BitFlow(img)
             bitflow.label = label_matrix
             bitflow.mnist_label = int(label)

@@ -1,18 +1,22 @@
 import matplotlib.pyplot as plt
+import numba
 import numpy as np
 
+@numba.njit
 def invert_lower_triangular(matrix):
     n = matrix.shape[0]
-    inv_matrix = np.eye(n, dtype=int)  # Start with the identity matrix
+    inv_matrix = np.eye(n, dtype=np.int32)  # Start with the identity matrix
     for i in range(1, n):
         for j in range(i):
             inv_matrix[i, j] = np.sum(np.multiply(matrix[i, j:i], inv_matrix[j:i, j])) % 2
     return inv_matrix
 
+@numba.njit
 def invert_upper_triangular(matrix):
     n = matrix.shape[0]
-    inv_matrix = np.eye(n, dtype=int)  # Start with the identity matrix
-    for i in reversed(range(n - 1)):
+    inv_matrix = np.eye(n, dtype=np.int32)  # Start with the identity matrix
+    for i in range(n-2,-1,-1):
+#    for i in reversed(range(n - 1)):
         for j in range(i + 1, n):
             inv_matrix[i, j] = np.sum(np.multiply(matrix[i, i + 1:j + 1], inv_matrix[i + 1:j + 1, j])) % 2
     return inv_matrix
@@ -60,8 +64,10 @@ def print_arrays_side_by_side(array1, array2, character_mode=True):
         plt.axis('off')  # Turn off the axis
         plt.show()
 
-def hamming_distance_a_b(a: np.array,b: np.array):
+@numba.njit
+def hamming_distance(a: np.array,b: np.array):
     return np.sum(a != b)
 
+@numba.njit
 def bernoulli_distance(a: np.array):
     return np.abs(512-np.sum(a))

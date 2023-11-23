@@ -1,13 +1,15 @@
 import numpy as np
 import random
 
+from binaryflow import MNISTBitFlowBatcher
 from optimizer import GreedyOptimizer
 from utils import print_arrays_side_by_side
 
 # Example of usage:
 if __name__ == "__main__":
-    optimizer = GreedyOptimizer(batch_size=10000)
-    batch = optimizer.optimize(iterations=50000, display_every=10000)
+    batcher = MNISTBitFlowBatcher(batch_size=1024)
+    optimizer = GreedyOptimizer(batcher)
+    batch = optimizer.optimize(iterations=10000, display_every=1000)
     #take a sample from the batch
     sample_bc = random.sample(batch,1)[0]
     while sample_bc.mnist_label != 6:
@@ -16,40 +18,27 @@ if __name__ == "__main__":
     print_arrays_side_by_side(sample_bc.block[0,:,:],sample_bc.block[-1,:,:],character_mode=False)
     #2 now start with the final layer and show the inverse
     start = sample_bc.block[-1,:,:]
-    backward = sample_bc.backward(start)
+    backward = optimizer.flow.backward(start)
     print_arrays_side_by_side(start,backward,character_mode=False)
+    #3 the pure signal
+    backward = optimizer.flow.backward(optimizer.signal)
+    print_arrays_side_by_side(optimizer.signal,backward,character_mode=False)
+    #4 probabalistic model of all 6's
+    sixes = [sample for sample in batch if sample.mnist_label == 6]
+    sixes_prob = np.mean([sample.block[-1, :, :] for sample in sixes], axis=0)  # Calculate mean across samples
+    for i in range(10):
+        draw = np.random.binomial(1, sixes_prob)
+        print_arrays_side_by_side(draw, optimizer.flow.backward(draw),character_mode=False)
+    optimizer.flow.save('flow.pkl')
+    #5 print the progression
+#    for i in range(0,sample_bc.block.shape[0]-2):
+#        print_arrays_side_by_side(sample_bc.block[i,:,:],sample_bc.block[i+1,:,:],character_mode=True)
+#        input("ok")
+
     #3 a 'noised' input
-    noisy_start = start ^ np.random.choice([0, 1], size=start.shape, p=[0.99, 0.01])
-    backward = sample_bc.backward(noisy_start)
-    print_arrays_side_by_side(start,backward,character_mode=False)
-    #4 finally, the pure signal
-    from optimizer import SIGNAL
-    backward = sample_bc.backward(SIGNAL)
-    print_arrays_side_by_side(SIGNAL,backward,character_mode=False)
-
-
-    #UNIT TEST FOR THE MATRIX INVERSION
-#    start = sample_bc.block[:,:,0]
-#    transform = sample_bc.transformations[0]
-#    forward = np.mod(np.dot(start,transform.matrix),2)
-#    print_arrays_side_by_side(start,forward)
-#    backward = np.mod(np.dot(forward,transform.get_inverted_matrix()),2)
-#    print_arrays_side_by_side(forward,backward)
-    #UNIT TEST FOR transform.forward and transform.backward
-#    start = sample_bc.block[:,:,0]
-#    transform = sample_bc.transformations[0]
-#    forward = transform.forward(start)
-#    print_arrays_side_by_side(start,forward)
-#    backward = transform.backward(forward)
-#    print_arrays_side_by_side(forward,backward)
-    #UNIT TEST for block forward() and backward()
-#    start = sample_bc.block[:,:,0]
-#    forward = sample_bc.forward(start)
-#    print_arrays_side_by_side(start,forward)
-#    print(f"Probability of Bernoulli: {estimate_probability(forward)}")
-#    print(f"Sum of ones: {np.sum(forward)}")
-#    backward = sample_bc.backward(forward)
-#    print_arrays_side_by_side(forward,backward)
+#    noisy_start = start ^ np.random.choice([0, 1], size=start.shape, p=[0.99, 0.01])
+#    backward = optimizer.flow.backward(noisy_start)
+#    print_arrays_side_by_side(start,backward,character_mode=False)
 
 
 # Motivations: 
@@ -60,90 +49,16 @@ if __name__ == "__main__":
 #  Specific to Generative applications
 #   reversible computing - also energy efficient
 
-# Final architecture:
-
-# Batch / Layer
-# BatchxLayerx32x32x8
-# Batch on dim 0
-# Visualize as Bernoulli on dim (-1)
-
-# Input Layer
-# 0x0x32x32x8 (for batch 0)
-# Certainty ==> dim(-1) is just duplicate of other dims
-
-# Output Layer
-# 0xkx32x32x8 (for batch 0, k layers)
-# Label ==> dim(-1) is just duplicate of other dims (known)
-# Labels are simple encoding on 32x32 grid e.g., block diagonal
 # Are we just targeting supervised learning in this project? 
-
-# Loss Function
-# Expectation of Hamming Distance at Output Layer; Model vs. Label
-# Monte Carlo calculation (?)
-
-# Transforms 
-# Reversible bitwise on each bit layer in 8-bit representation
-# Optimization:
-#   Choose 8 
-
-# Supervised learning
-# Input-2-3-4-5-6-7-Output
-# Input encoding : e.g., MNIST binarized image
 # Output encoding ; e.g., block diagonal .. but could be anything
 #  (opportunity for modeler to incorporate prior knowledge)
-# # of transforms: 7
-# < Python class Bitbox that meets these criteria >
-#   -has 32x32x8 grid of 1,0
-#   -can evaluate Bernoulli, show as float or as sample
-#   -can set input layer, output layer (model), output layer (label)  
-#   -can calculate Hamming distance
-#   -has 7 distinct transformations
-#   -can apply its transformations in forward direction
-#   -can apply its transformations in the backward direction
-# Basic idea: shape layers 2-7 such that result is closer to output
-#  (so Bernoulli eval gives you the Output instead of the input)
 # Game: start w/ input, need to transform it to match output
 #    using only reversible computations 
-# Optimization : loss = hamming distance model vs. label
-# Optimization algo: Monte Carlo / greedy by layer (?)
 # Optimization algo: Reinforcement Learning (?) 
-# Transforms act on 32x32 bit layer
-# Transforms must be reversible and bit-wise
 # Transforms can be convolution-like or mixing - as long as they are reversible
-# < Python class Transform that meets these criteria > 
-# Apply transforms in forward direction - but they're reversible
-# Model evaluation : Bernoulli sample 
 # probably define a fixed set of "off the shelf" transformations
 # (reversible automata; CNOT; GF(2) mixture; etc.)
-# then it's just a matter of sequencing 7 to fit the data
-
 # Mixture of Models + Softmax == more complex models
-
-
-# Transformation:
-# 
-
-
-
-
-
-
-
-# 32x32 grid
-# traverse grid w/ 2^5 filters
-# result = 2^5 grids of 31x31
-# cosolidate into one grid where cell >= 16
-# traverse grid w/ 2^5 filters
-# etc.
-# decode:
-# start w/ 4x4 grid
-# predict boundaries under all 2^5 filters
-# consolidate boundaries where cell >= 16
-# flaws:
-# -> probabilities should vary depending on what we're generating
-# -> locality is strictly defined in model (no attention)
-
-# or
 
 # time-evolution 
 # rely on reversible processes as much as possible
@@ -164,8 +79,6 @@ Principle: Inspired by the annealing process in metallurgy where a material is h
 Procedure: The algorithm starts with a random solution and then, at each step, selects a neighboring solution. If the new solution is better, it is always accepted. If it's worse, it might still be accepted with a certain probability, especially in the early stages. This probability decreases as the "temperature" of the system decreases (hence the annealing analogy). The idea is to allow the algorithm to escape local minima early on when the temperature is high and then fine-tune the search as the temperature drops.
 Usage: SA is a general-purpose optimization method that can be applied to many problems. It's especially useful when the search space is discrete and for combinatorial optimization problems.
 '''
-
-
 
 '''
 A deep generative network is a type of neural network designed to generate new data samples that resemble a given set of training samples. The major components of a functioning deep generative network include:

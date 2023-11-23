@@ -1,4 +1,11 @@
+
+#TBD: purpose of transpose?
+#TBD: should multiplcation and bias be separate layers?
+#TBD: optimize forward() and backward() implementations - numba does not seem to support
+#     integer matrix operations; or, something else about the calculation.
+
 import numpy as np
+import pickle
 
 from utils import invert_lower_triangular, invert_upper_triangular
 
@@ -15,13 +22,45 @@ class Transformation:
     def backward(self, input_grid: np.ndarray) -> np.ndarray:
         return input_grid #by default, identify
 
+class TransformationFlow(Transformation):
+    def __init__(self):
+        self.transformations = []
+    
+    def append(self, transformation: Transformation):
+        self.transformations.append(transformation)
+
+    def forward(self, input_grid: np.ndarray) -> np.ndarray:
+        result_grid = input_grid
+        for transformation in self.transformations:
+            result_grid = transformation.forward(result_grid)
+        return result_grid
+
+    def backward(self, input_grid: np.ndarray) -> np.ndarray:
+        result_grid = input_grid
+        for transformation in self.transformations[::-1]:
+            result_grid = transformation.backward(result_grid)
+        return result_grid
+
+    def num_layers(self) -> int:
+        return len(self.transformations)
+
+    def save(self, file_name: str):
+        with open(file_name,"wb") as file:
+            pickle.dump(self,file)
+
+    @classmethod
+    def load(cls, file_name: str):
+        with open(file_name,"rb") as file:
+            return pickle.load(file)
+
 class GF2LinearLayer(Transformation):
-    def __init__(self, n=32):
-        self.matrix = np.eye(n, dtype=int)
+    def __init__(self, n=32, transpose=True):
+        self.matrix = np.eye(n, dtype=np.int32)
         self.inverted_matrix_cache = None
-        self.lower = np.eye(n, dtype=int)
-        self.upper = np.eye(n, dtype=int)
-        self.bias = np.zeros((n,n), dtype=int)
+        self.lower = np.eye(n, dtype=np.int32)
+        self.upper = np.eye(n, dtype=np.int32)
+        self.bias = np.zeros((n,n), dtype=np.int32)
+        self.transpose = transpose
 
     def inverted_matrix(self) -> np.array:
         '''Use this method to access the inverted matrix'''
@@ -33,21 +72,23 @@ class GF2LinearLayer(Transformation):
 
     def forward(self, input_grid: np.ndarray) -> np.ndarray:
         '''Apply the forward transformation'''
-        return np.transpose((np.dot(input_grid, self.matrix) % 2 + self.bias) % 2)
-#        return (np.dot(input_grid, self.matrix) % 2 + self.bias) % 2
+        if self.transpose:
+            return np.transpose((np.dot(input_grid, self.matrix) % 2 + self.bias) % 2)
+        return (np.dot(input_grid, self.matrix) % 2 + self.bias) % 2
 
     def backward(self, input_grid: np.ndarray) -> np.ndarray:
         '''Apply the inverse transformation.'''
         inverted_matrix = self.inverted_matrix()
-        return np.dot((np.transpose(input_grid) + self.bias) % 2, inverted_matrix) % 2
-#        return np.dot((input_grid + self.bias) % 2, inverted_matrix) % 2
+        if self.transpose:
+            return np.dot((np.transpose(input_grid) + self.bias) % 2, inverted_matrix) % 2
+        return np.dot((input_grid + self.bias) % 2, inverted_matrix) % 2
 
     @classmethod
-    def random_invertible(cls, n=DEFAULT_SIZE, num_tri_ones=1, num_bias_ones=1):
+    def random_invertible(cls, n=DEFAULT_SIZE, num_tri_ones=1, num_bias_ones=1, transpose=True):
         '''Create a random GF2 Linear Layer'''
         # Initialize lower and upper triangular matrices
-        lower = np.zeros((n, n), dtype=int)
-        upper = np.zeros((n, n), dtype=int)
+        lower = np.zeros((n, n), dtype=np.int32)
+        upper = np.zeros((n, n), dtype=np.int32)
         selected_indices = np.random.choice(len(ALL_PAIRS), num_tri_ones, replace=False)
         for index in selected_indices:
             x, y = ALL_PAIRS[index]
@@ -61,13 +102,13 @@ class GF2LinearLayer(Transformation):
         # Multiply matrices over GF(2)
         invertible_matrix = np.mod(np.dot(lower, upper), 2)
         # Now set the bias matrix
-        bias = np.zeros((n,n), dtype=int)
+        bias = np.zeros((n,n), dtype=np.int32)
         selected_indices = np.random.choice(len(ALL_PAIRS), num_bias_ones, replace=False)
         for index in selected_indices:
             x, y = ALL_PAIRS[index]
             bias[x, y] = 1
         # Create and return the instance
-        instance=cls(n)
+        instance=cls(n=n, transpose=transpose)
         instance.lower = lower
         instance.upper = upper
         instance.matrix= invertible_matrix
