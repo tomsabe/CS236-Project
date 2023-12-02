@@ -2,6 +2,8 @@ import matplotlib.pyplot as plt
 import numba
 import numpy as np
 
+INT_TYPE = np.int32
+
 @numba.njit
 def invert_lower_triangular(matrix):
     n = matrix.shape[0]
@@ -21,27 +23,12 @@ def invert_upper_triangular(matrix):
             inv_matrix[i, j] = np.sum(np.multiply(matrix[i, i + 1:j + 1], inv_matrix[i + 1:j + 1, j])) % 2
     return inv_matrix
 
-def rle_length_32bit(segment):
-    if len(segment) == 0:
-        return 0
-    compressed_length = 0
-    current_bit = segment[0]
-    count = 1
-    for bit in segment[1:]:
-        if bit == current_bit:
-            count += 1
-        else:
-            compressed_length += 1 + len(str(count))
-            current_bit = bit
-            count = 1
-    compressed_length += 1 + len(str(count))
-    return compressed_length
-
-def estimate_rle_length(array):
-    total_compressed_length = 0
-    for row in array:
-        total_compressed_length += rle_length_32bit(row)
-    return total_compressed_length
+@numba.njit
+def estimate_batch_rle_complexity(arr):
+    flat_batch = arr.ravel()
+    changes = np.diff(flat_batch) != 0
+    rle_complexity = np.sum(changes)
+    return rle_complexity
 
 def print_arrays_side_by_side(array1, array2, character_mode=True):
     '''Utility function displays two 32x32 binary arrays'''
@@ -71,3 +58,33 @@ def hamming_distance(a: np.array,b: np.array):
 @numba.njit
 def bernoulli_distance(a: np.array):
     return np.abs(512-np.sum(a))
+
+def square_target(batch_size,n=32):
+    target_block = np.zeros((batch_size,n,n),dtype=INT_TYPE)
+    target_block[:,12:20,12:20] = 1
+    return target_block
+
+def batch_hamming_target(input_block, training_labels):
+    hamming_target = np.zeros_like(input_block,dtype=INT_TYPE)
+# Same for each digit:
+    hamming_target[:,12:20,12:20] = 1
+# Different for each digit:
+#    for i in range(len(training_labels)):
+#        if training_labels[i] == '6':
+#            hamming_target[i,12:16,12:16] = 1
+#        if training_labels[i] == '7':
+#            hamming_target[i,16:20,16:20] = 1
+    return hamming_target
+
+def log_loss(y_true, y_pred):
+    y_pred = np.clip(y_pred, 1e-15, 1 - 1e-15) #avoid log(0)
+    return -np.mean(y_true * np.log(y_pred) + (1 - y_true) * np.log(1 - y_pred))
+
+@numba.njit
+def xd_transpose(arr):
+    if arr.ndim == 2:
+        return np.transpose(arr)
+    elif arr.ndim == 3:
+        return np.transpose(arr, (0, 2, 1))
+    else:
+        raise ValueError("Array must be either 2D or 3D")

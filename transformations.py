@@ -7,7 +7,8 @@
 import numpy as np
 import pickle
 
-from utils import invert_lower_triangular, invert_upper_triangular
+from utils import invert_lower_triangular, invert_upper_triangular, xd_transpose
+from utils import INT_TYPE
 
 DEFAULT_SIZE=32
 ALL_PAIRS= [(i, j) for i in range(DEFAULT_SIZE) for j in range(DEFAULT_SIZE)]
@@ -25,6 +26,7 @@ class Transformation:
 class TransformationFlow(Transformation):
     def __init__(self):
         self.transformations = []
+        self.latent_distribution = None
     
     def append(self, transformation: Transformation):
         self.transformations.append(transformation)
@@ -43,6 +45,17 @@ class TransformationFlow(Transformation):
 
     def num_layers(self) -> int:
         return len(self.transformations)
+
+    def parameter_count(self):
+        layers = self.num_layers()
+        bits = layers * 32 * 32
+        float_32s = bits/32
+        latent_space = DEFAULT_SIZE*DEFAULT_SIZE
+        params = float_32s + latent_space
+        print(f"Layers: {layers}\tBits: {bits}\tFloat32 Equivalents: {float_32s}")
+        print(f"Latent Space Probabilities: {latent_space}")
+        print(f"Total float32 equivalents: {params} ")
+        return params
 
     def save(self, file_name: str):
         with open(file_name,"wb") as file:
@@ -73,15 +86,25 @@ class GF2LinearLayer(Transformation):
     def forward(self, input_grid: np.ndarray) -> np.ndarray:
         '''Apply the forward transformation'''
         if self.transpose:
-            return np.transpose((np.dot(input_grid, self.matrix) % 2 + self.bias) % 2)
+            return xd_transpose((np.dot(input_grid, self.matrix) % 2 + self.bias) % 2)
         return (np.dot(input_grid, self.matrix) % 2 + self.bias) % 2
 
     def backward(self, input_grid: np.ndarray) -> np.ndarray:
         '''Apply the inverse transformation.'''
         inverted_matrix = self.inverted_matrix()
         if self.transpose:
-            return np.dot((np.transpose(input_grid) + self.bias) % 2, inverted_matrix) % 2
+            return np.dot((xd_transpose(input_grid) + self.bias) % 2, inverted_matrix) % 2
         return np.dot((input_grid + self.bias) % 2, inverted_matrix) % 2
+
+    @classmethod
+    def bias_only(cls, bias: np.array):
+        '''Create a GF2 Linear Layer that only applies the given Bias'''
+        n = bias.shape[0]
+        if n != bias.shape[1]:
+            raise ValueError("Bias must be a square matrix")
+        instance = cls(n=n, transpose=False)
+        instance.bias = bias
+        return instance
 
     @classmethod
     def random_invertible(cls, n=DEFAULT_SIZE, num_tri_ones=1, num_bias_ones=1, transpose=True):
@@ -115,13 +138,12 @@ class GF2LinearLayer(Transformation):
         instance.bias = bias
         return instance
 
-
 if __name__ == '__main__':
     # Unit tests for GF2LinearLayer
 
     # Test 1: Ensure that the forward and backward transformations are inverses
     layer = GF2LinearLayer.random_invertible()
-    input_grid = np.random.randint(0, 2, (32, 32))
+    input_grid = np.random.randint(0, 2, (32, 32), dtype=INT_TYPE)
 
     forward_result = layer.forward(input_grid)
     backward_result = layer.backward(forward_result)
@@ -129,8 +151,20 @@ if __name__ == '__main__':
     assert np.array_equal(backward_result, input_grid), "Backward transformation did not correctly invert the forward transformation"
 
     # Test 2: Identity transformation test
-    identity_layer = GF2LinearLayer()
+    identity_layer = GF2LinearLayer(transpose=False)
     identity_result = identity_layer.forward(input_grid)
     assert np.array_equal(identity_result, input_grid), "Identity transformation failed"
 
     print("All tests passed.")
+
+    # Test 3: Bias-Only Test
+    bias = np.random.randint(0, 2, (32, 32), dtype=INT_TYPE)
+    bias_layer = GF2LinearLayer.bias_only(bias=bias)
+    input_grid = np.random.randint(0, 2, (32, 32), dtype=INT_TYPE)
+    print(f"bias input sum: {np.sum(input_grid)}")
+    forward_result = layer.forward(input_grid)
+    print(f"biased sum: {np.sum(forward_result)}")
+    backward_result = layer.backward(forward_result)
+    print(f"reversed bias sum: {np.sum(backward_result)}")
+    assert np.array_equal(backward_result, input_grid), "Identity transformation failed"
+
