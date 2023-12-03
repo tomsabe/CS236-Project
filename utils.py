@@ -70,10 +70,10 @@ def batch_hamming_target(input_block, training_labels):
     hamming_target[:,12:20,12:20] = 1
 # Different for each digit:
 #    for i in range(len(training_labels)):
-#        if training_labels[i] == '6':
-#            hamming_target[i,12:16,12:16] = 1
-#        if training_labels[i] == '7':
-#            hamming_target[i,16:20,16:20] = 1
+#        if training_labels[i] == 6:
+#            hamming_target[i,0:16,0:16] = 1
+#        if training_labels[i] == 7:
+#            hamming_target[i,16:32,16:32] = 1
     return hamming_target
 
 def log_loss(y_true, y_pred):
@@ -88,3 +88,16 @@ def xd_transpose(arr):
         return np.transpose(arr, (0, 2, 1))
     else:
         raise ValueError("Array must be either 2D or 3D")
+
+def plot_digit_grid(samples, title, digit_size=(32, 32)):
+    """Function to plot a grid of digit images."""
+    fig, axes = plt.subplots(10, 10, figsize=(10, 10))
+    fig.suptitle(title)
+
+    for i, ax in enumerate(axes.flat):
+        # Assuming the samples are flattened, reshape them to the original image shape
+        ax.imshow(samples[i].reshape(digit_size), cmap='gray')
+        ax.axis('off')
+
+    plt.show()
+
