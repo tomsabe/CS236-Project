@@ -1,6 +1,6 @@
 # MNIST data file
 *.npz
-flow*.pkl
+models/flow*.pkl
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

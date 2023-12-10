@@ -1,8 +1,4 @@
 
-#TBD: purpose of transpose?
-#TBD: should multiplcation and bias be separate layers?
-#TBD: optimize forward() and backward() implementations - numba does not seem to support
-#     integer matrix operations; or, something else about the calculation.
 
 import numpy as np
 import pickle
