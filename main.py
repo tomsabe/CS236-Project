@@ -21,26 +21,27 @@ from utils import plot_digit_grid
 from utils import INT_TYPE
 from utils import estimate_batch_rle_complexity
 
-TARGET_DIGITS = [6,7] #use of 6 and 7 is hardcoded
-
-#Hyperparameters:
+# Hyperparameters:
 MAX_BATCH_SIZE = 100
 MAX_ITERATIONS = 20000
 STOPPING_CRITERIA = 3000 #stop if no optimizing action found after this # of tries
 
 # training loop:
-TRY_PURE_BIAS = True
-TRY_GF2 = True
-MAX_TRI_ONES = 3 #somewhere around 3 seems like right balance of variety w/o wasting a lot of iterations
-MAX_BIAS_ONES = 0 #including bias term in WX+B GF(2) linear transformation hasn't been helpful
-TRANSPOSE_LAYERS = True #Transposing X has little log loss effect but may help digits look a little better
+TRY_PURE_BIAS = True #perform invertible bitflip at each (x,y) with >50% 1's
+TRY_GF2 = True #look for invertible GF(2) matrix multiplication "W" that reduces loss
+MAX_TRI_ONES = 3 #sparsity measure for "W" - somewhere around 3 seems like balance of variety w/o wasting a lot of iterations
+MAX_BIAS_ONES = 0 #including bias term in WX+B GF(2) transformation hasn't been helpful
+TRANSPOSE_LAYERS = True #Transposing each layer has little log loss effect but may help digits look a little better
 FIRST_ABLATION = 0 #Delaying the ablation of less informative (x,y) does not seem to be helpful for our MNIST data
-ABLATE_THRESHOLD = 0.35 #0.35 works with MNIST data -- amenable to relatively high ablation
+ABLATE_THRESHOLD = 0.35 #0.35 works for our MNIST tests -- amenable to relatively high ablation
 
 # loss function:
 BITCOUNT_LAMBDA = 2**0 # weighting factor for loss function; use 2^x so amenable to bitshift
 RLE_LENGTH_LAMBDA = 0 #weighting factor for RLE-length function; use 2^x so amenable to bitshift
 HAMMING_LAMBDA = 0 # weighting factor for loss function; use 2^x so amenable to bitshift
+
+# Target digits of 6 and 7 are hardcoded in this version, not hyperparamters
+TARGET_DIGITS = [6,7] #do not modify
 
 #@numba.njit
 def loss_function(block, hamming_target):
